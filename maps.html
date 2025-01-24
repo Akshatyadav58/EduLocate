@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Leaflet.js - Nearby Schools</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <style>
+        #map {
+            height: 500px;
+            width: 100%;
+        }
+        #info {
+            margin: 10px 0;
+        }
+    </style>
+</head>
+<body>
+    <h1>Find Nearby Schools</h1>
+    <p id="info">Allow location access to find nearby schools.</p>
+    <div id="map"></div>
+    <button id="show-schools">Show Nearby Schools</button>
+
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script>
+        let map, userMarker;
+
+        // Initialize the map
+        function initMap(lat, lng) {
+            map = L.map('map').setView([lat, lng], 14);
+            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                attribution: '&copy; OpenStreetMap contributors',
+            }).addTo(map);
+
+            // Add user location marker
+            userMarker = L.marker([lat, lng]).addTo(map).bindPopup("Your Location").openPopup();
+        }
+
+        function fetchNearbySchools(lat, lng) {
+    const radius = 1500; // 1.5 km
+    const overpassQuery = `
+        [out:json];
+        (
+            node["amenity"="school"](around:${radius},${lat},${lng});
+            way["amenity"="school"](around:${radius},${lat},${lng});
+            relation["amenity"="school"](around:${radius},${lat},${lng});
+        );
+        out center;
+    `;
+    const url = `https://overpass-api.de/api/interpreter?data=${encodeURIComponent(overpassQuery)}`;
+
+    fetch(url)
+        .then(response => response.json())
+        .then(data => {
+            if (data.elements.length === 0) {
+                alert("No schools found nearby.");
+                return;
+            }
+
+            // Add markers for each school
+            data.elements.forEach(element => {
+                const location = element.lat && element.lon 
+                    ? [element.lat, element.lon] // For nodes
+                    : [element.center.lat, element.center.lon]; // For ways and relations
+
+                L.marker(location)
+                    .addTo(map)
+                    .bindPopup(element.tags.name || "School")
+                    .openPopup();
+            });
+        })
+        .catch(error => {
+            console.error("Error fetching schools:", error);
+            alert("An error occurred while fetching nearby schools.");
+        });
+            }
+
+
+        // Get the user's current location
+        if (navigator.geolocation) {
+            navigator.geolocation.getCurrentPosition(
+                position => {
+                    const { latitude, longitude } = position.coords;
+                    initMap(latitude, longitude);
+
+                    // Add event listener to fetch schools
+                    document.getElementById('show-schools').addEventListener('click', () => {
+                        fetchNearbySchools(latitude, longitude);
+                    });
+                },
+                error => {
+                    console.error("Error getting location:", error);
+                    document.getElementById('info').textContent = "Could not retrieve your location.";
+                }
+            );
+        } else {
+            document.getElementById('info').textContent = "Geolocation is not supported by your browser.";
+        }
+    </script>
+</body>
+</html>
